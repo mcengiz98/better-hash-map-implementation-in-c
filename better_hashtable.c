@@ -9,33 +9,79 @@ typedef struct _entry
     struct _entry *next;
 } entry;
 
-typedef struct _hash_table
+struct _hash_table
 {
     uint32_t size; // number of elements
     hashfunction *hash;
+    cleanupfunction *cleanup;
     entry **elemnets;
-} hash_table;
+};
 
+/**
+ * @brief index of the key in the hash table
+ * 
+ * @param ht : hash table
+ * @param key : key
+ * @return size_t : index of the key
+ */
 static size_t hash_table_index(hash_table *ht, const char *key)
 {
     return ht->hash(key, strlen(key)) % ht->size;
 }
 
-hash_table *hash_table_create(uint32_t size, hashfunction *hf)
+/**
+ * @brief Hash table constructor
+ * 
+ * @param size : size of the hash table
+ * @param hf : hash function
+ * @param cf : cleanup function. If this value is NULL, then the default free function will be used.
+ * @return hash_table* : pointer to the hash table
+ */
+hash_table *hash_table_create(uint32_t size, hashfunction *hf, cleanupfunction *cf)
 {
     hash_table *ht = malloc(sizeof(hash_table));
     ht->size = size;
     ht->hash = hf;
+    if (cf)
+    {
+        ht->cleanup = cf;
+    }
+    else
+    {
+        ht->cleanup = free;
+    }
     ht->elemnets = calloc(sizeof(entry *), ht->size); // It will be zero initialized
     return ht;
 }
 
+/**
+ * @brief Hash table destructor
+ * 
+ * @param ht : hash table
+ */
 void hash_table_destroy(hash_table *ht)
 {
+    for (uint32_t i = 0; i < ht->size; ++i)
+    {
+        while (ht->elemnets[i])
+        {
+            entry *tmp = ht->elemnets[i];
+            ht->elemnets[i] = ht->elemnets[i]->next;
+            free(tmp->key);
+            ht->cleanup(tmp->obj);
+            free(tmp);
+        }
+    }
+
     free(ht->elemnets);
     free(ht);
 }
 
+/**
+ * @brief Print function for the hash table 
+ * 
+ * @param ht : hash table
+ */
 void hash_table_print(hash_table *ht)
 {
     printf("Hash Table:\n");
@@ -59,6 +105,11 @@ void hash_table_print(hash_table *ht)
     }
 }
 
+/**
+ * @brief Print function for the hash table without NULL entries
+ * 
+ * @param ht : hash table
+ */
 void hash_table_print_wo_null(hash_table *ht)
 {
     printf("Hash Table:\n");
@@ -76,6 +127,15 @@ void hash_table_print_wo_null(hash_table *ht)
     }
 }
 
+/**
+ * @brief Insert function for the hash table
+ * 
+ * @param ht : hash table
+ * @param key : key
+ * @param obj : object
+ * @return true : if the insertion was successful
+ * @return false : if the insertion was unsuccessful
+ */
 bool hash_table_insert(hash_table *ht, const char *key, void *obj)
 {
     if (key == NULL || obj == NULL || ht == NULL)
@@ -91,8 +151,10 @@ bool hash_table_insert(hash_table *ht, const char *key, void *obj)
     // Create new entry
     entry *e = malloc(sizeof(entry));
     e->obj = obj;
-    e->key = malloc(strlen(key) + 1);
-    strcpy(e->key, key);
+    e->key = strdup(key);
+
+    // e->key = malloc(strlen(key) + 1);
+    // strcpy(e->key, key);
 
     // Insert entry
     e->next = ht->elemnets[index];
@@ -100,6 +162,13 @@ bool hash_table_insert(hash_table *ht, const char *key, void *obj)
     return true;
 }
 
+/**
+ * @brief Lookup function for the hash table
+ * 
+ * @param ht : hash table
+ * @param key : key for the lookup
+ * @return void* : pointer to the object
+ */
 void *hash_table_lookup(hash_table *ht, const char *key)
 {
     if (key == NULL || ht == NULL)
@@ -120,6 +189,13 @@ void *hash_table_lookup(hash_table *ht, const char *key)
     return tmp->obj;
 }
 
+/**
+ * @brief Delete function for the hash table
+ * 
+ * @param ht : hash table
+ * @param key : key for the deletion
+ * @return void* : pointer to the object
+ */
 void *hash_table_delete(hash_table *ht, const char *key)
 {
     if (key == NULL || ht == NULL)
